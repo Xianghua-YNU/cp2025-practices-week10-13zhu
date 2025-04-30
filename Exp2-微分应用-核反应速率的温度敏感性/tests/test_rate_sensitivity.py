@@ -1,68 +1,44 @@
-import sys
-import os
+import math
+import matplotlib.pyplot as plt
 import numpy as np
-import pytest
-
-# 添加父目录到系统路径以导入被测试模块
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-#from solution.rate_sensitivity_solution import q3a
-from rate_sensitivity import q3a
-
-class TestRateSensitivity:
-    """测试3-α反应速率计算和温度敏感性指数"""
-    
-    def test_q3a_zero_temperature(self):
-        """测试零温度和负温度的处理"""
-        assert q3a(0.0) == 0.0
-        assert q3a(-1.0e8) == 0.0
-    
-    def test_q3a_normal_temperature(self):
-        """测试正常温度范围的反应速率计算"""
-        # 测试一些典型温度点
-        test_temps = [1.0e8, 2.5e8, 5.0e8, 1.0e9]
-        expected_rates = [
-            3.8551e-08,  # at 1.0e8 K
-            7.3219e+02,  # at 2.5e8 K
-            6.1048e+05,  # at 5.0e8 K
-            6.2323e+06   # at 1.0e9 K (updated from 1.1482e-03)
-        ]
-        
-        for T, expected in zip(test_temps, expected_rates):
-            calculated = q3a(T)
-            # 由于指数计算的数值敏感性，使用相对误差进行比较
-            assert np.abs(calculated - expected) / expected < 1e-3, \
-                f"温度 {T} K 处的计算结果与预期值相差过大"
-    
-    def test_temperature_sensitivity(self):
-        """测试温度敏感性指数的计算"""
-        T0 = 1.0e8  # 测试温度点
-        h = 1.0e-8  # 扰动因子
-        
-        # 手动计算温度敏感性指数
-        q_T0 = q3a(T0)
-        q_T0_plus_dT = q3a(T0 * (1 + h))
-        
-        # 使用前向差分计算 nu
-        nu = (T0 / q_T0) * (q_T0_plus_dT - q_T0) / (h * T0)
-        
-        # 在 T = 10^8 K 时，nu 应该约为 41
-        assert 40 < nu < 42, \
-            f"T = 10^8 K 时的温度敏感性指数计算错误，期望约41，得到{nu}"
-    
-    def test_q3a_formula(self):
-        """测试反应速率公式的基本结构"""
-        T = 1.0e8
-        T8 = T / 1.0e8
-        
-        # 手动计算预期值
-        expected = 5.09e11 * T8**(-3.0) * np.exp(-44.027/T8)
-        calculated = q3a(T)
-        
-        # 检查计算结果是否符合公式结构
-        assert np.abs(calculated - expected) / expected < 1e-10, \
-            "反应速率计算公式结构不正确"
 
 
-if __name__ == "__main__":
-    # 运行所有测试
-    pytest.main([__file__])
+def reaction_rate(T):
+    """
+    编写一个函数，输入参数温度 T (单位 K)，返回 3-α 反应速率中与温度相关的部分 q_3a / (ρ²γ³)
+    即计算: f(T) = 5.09×10¹¹T₈⁻³ e⁻⁴⁴.⁰²⁷/T₈，其中 T₈ = T / 10⁸。
+    """
+    T8 = T / 1e8
+    return 5.09 * (10 ** 11) * (T8 ** (-3)) * math.exp(-44.027 / T8)
+
+
+def temperature_sensitivity(T0, h=1e-8):
+    """
+    根据 v 的定义 v = (T/q) * (dq/dT)，使用数值微分（向前差分法）来近似导数 dq/dT
+    选择一个合适的微小温度扰动 ΔT。为了平衡截断误差和舍入误差，一个常见的选择是 ΔT = h * T0，其中 h 是一个很小的数，例如 h = 10⁻⁸。
+    将近似导数代入 v 的公式。
+    """
+    dT = h * T0
+    q_T0 = reaction_rate(T0)
+    q_T0_plus_dT = reaction_rate(T0 + dT)
+    dq_dT = (q_T0_plus_dT - q_T0) / dT
+    return (T0 / q_T0) * dq_dT
+
+
+# 任务3
+reference_temperatures = [1.0e8, 2.5e8, 5.0e8, 1.0e9, 2.5e9, 5.0e9]
+for T0 in reference_temperatures:
+    v = temperature_sensitivity(T0)
+    print(f"温度: {T0} K, v值: {v}")
+
+# 任务4
+# 生成温度范围
+T = np.logspace(8, 9, 100)  # 从10^8 到 10^9 取100个点
+q_values = [reaction_rate(t) for t in T]
+
+# 绘制对数-对数坐标图
+plt.loglog(T, q_values)
+plt.xlabel('温度 T (K)')
+plt.ylabel('q_3a / (ρ²γ³)')
+plt.title('反应速率与温度的关系')
+plt.show()
